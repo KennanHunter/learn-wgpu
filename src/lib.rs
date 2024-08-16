@@ -1,3 +1,4 @@
+pub mod color;
 mod state;
 
 use state::State;
@@ -5,7 +6,7 @@ use state::State;
 use wasm_bindgen::prelude::*;
 use winit::{
     event::{ElementState, Event, KeyEvent, WindowEvent},
-    event_loop::{EventLoop},
+    event_loop::EventLoop,
     keyboard::{KeyCode, PhysicalKey},
     window::WindowBuilder,
 };

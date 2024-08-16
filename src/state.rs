@@ -1,11 +1,15 @@
 use wgpu::{CommandEncoderDescriptor, Label};
 use winit::{event::WindowEvent, window::Window};
 
+use crate::color::hue_to_rgb;
+
 pub struct State<'a> {
     surface: wgpu::Surface<'a>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
+
+    background_color: wgpu::Color,
 
     pub size: winit::dpi::PhysicalSize<u32>,
 
@@ -83,6 +87,12 @@ impl<'a> State<'a> {
             config,
             window,
             size,
+            background_color: wgpu::Color {
+                r: 0.1,
+                g: 0.2,
+                b: 0.3,
+                a: 1.0,
+            },
         }
     }
 
@@ -100,7 +110,29 @@ impl<'a> State<'a> {
     }
 
     pub fn input(&mut self, event: &WindowEvent) -> bool {
-        false
+        match event {
+            WindowEvent::CursorMoved {
+                device_id,
+                position,
+            } => {
+                let cursor_x = position.x / self.size.width as f64;
+                let cursor_y = position.y / self.size.height as f64;
+
+                let [red, green, blue] = hue_to_rgb(cursor_x, 1.0, 1.0 - cursor_y);
+
+                self.background_color = wgpu::Color {
+                    r: red,
+                    g: green,
+                    b: blue,
+                    a: 1.0,
+                };
+
+                // self.render();
+
+                true
+            }
+            _ => false,
+        }
     }
 
     pub fn update(&mut self) {}
@@ -124,12 +156,7 @@ impl<'a> State<'a> {
                 view: &view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 1.0,
-                    }),
+                    load: wgpu::LoadOp::Clear(self.background_color),
                     store: wgpu::StoreOp::Store,
                 },
             })],
