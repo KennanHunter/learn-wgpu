@@ -10,6 +10,8 @@ pub struct State<'a> {
     pub size: winit::dpi::PhysicalSize<u32>,
 
     window: &'a Window,
+
+    render_pipeline: wgpu::RenderPipeline,
 }
 
 impl<'a> State<'a> {
@@ -76,6 +78,46 @@ impl<'a> State<'a> {
             view_formats: Vec::new(),
         };
 
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+        });
+
+        let render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Render Pipeline Layout"),
+                bind_group_layouts: &[],
+                push_constant_ranges: &[],
+            });
+
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render Pipeline"),
+            layout: Some(&render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                buffers: &[],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                
+            },
+            depth_stencil: todo!(),
+            multisample: todo!(),
+            multiview: todo!(),
+            cache: todo!(),
+        });
+
         Self {
             surface,
             device,
@@ -83,6 +125,7 @@ impl<'a> State<'a> {
             config,
             window,
             size,
+            render_pipeline: todo!(),
         }
     }
 
