@@ -1,5 +1,7 @@
-use wgpu::{CommandEncoderDescriptor, Label};
+use wgpu::{util::DeviceExt, CommandEncoderDescriptor, Label};
 use winit::{event::WindowEvent, window::Window};
+
+use crate::VERTICES;
 
 pub struct State<'a> {
     surface: wgpu::Surface<'a>,
@@ -12,6 +14,8 @@ pub struct State<'a> {
     window: &'a Window,
 
     render_pipeline: wgpu::RenderPipeline,
+
+    vertex_buffer: wgpu::Buffer,
 }
 
 impl<'a> State<'a> {
@@ -128,6 +132,12 @@ impl<'a> State<'a> {
             cache: None,
         });
 
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(VERTICES),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
         Self {
             surface,
             device,
@@ -136,6 +146,7 @@ impl<'a> State<'a> {
             window,
             size,
             render_pipeline,
+            vertex_buffer,
         }
     }
 
