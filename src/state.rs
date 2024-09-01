@@ -1,5 +1,5 @@
 use wgpu::{CommandEncoderDescriptor, Label};
-use winit::{event::WindowEvent, window::Window};
+use winit::{event::WindowEvent, keyboard::NamedKey, window::Window};
 
 pub struct State<'a> {
     surface: wgpu::Surface<'a>,
@@ -11,7 +11,10 @@ pub struct State<'a> {
 
     window: &'a Window,
 
+    use_colored: bool,
+
     render_pipeline: wgpu::RenderPipeline,
+    colored_pipeline: wgpu::RenderPipeline,
 }
 
 impl<'a> State<'a> {
@@ -128,7 +131,46 @@ impl<'a> State<'a> {
             cache: None,
         });
 
+        let colored_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render Pipeline"),
+            layout: Some(&render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                buffers: &[],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_colored",
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        });
+
         Self {
+            use_colored: true,
             surface,
             device,
             queue,
@@ -136,6 +178,7 @@ impl<'a> State<'a> {
             window,
             size,
             render_pipeline,
+            colored_pipeline,
         }
     }
 
@@ -152,7 +195,22 @@ impl<'a> State<'a> {
         }
     }
 
+    // Return true if event is handled by input()
     pub fn input(&mut self, event: &WindowEvent) -> bool {
+        match event {
+            WindowEvent::KeyboardInput {
+                device_id,
+                event,
+                is_synthetic,
+            } => match event.logical_key {
+                winit::keyboard::Key::Named(NamedKey::Space) => {
+                    self.use_colored = !self.use_colored
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+
         false
     }
 
@@ -192,7 +250,12 @@ impl<'a> State<'a> {
                 timestamp_writes: None,
             });
 
-            render_pass.set_pipeline(&self.render_pipeline);
+            if self.use_colored {
+                render_pass.set_pipeline(&self.colored_pipeline);
+            } else {
+                render_pass.set_pipeline(&self.render_pipeline);
+            }
+
             render_pass.draw(0..3, 0..1);
         }
 

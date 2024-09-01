@@ -1,5 +1,5 @@
 struct VertexOutput {
-    @builtin(position) clip_position: vec4<f32>
+    @builtin(position) clip_position: vec4<f32>,
 }
 
 @vertex
@@ -18,4 +18,9 @@ fn vs_main(
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(0.3, 0.2, 0.1, 1.0);
+}
+
+@fragment
+fn fs_colored(in: VertexOutput) -> @location(0) vec4<f32> {
+    return vec4<f32>(1.0, 0.2, 0.1, 1.0);
 }
