@@ -1,5 +1,3 @@
-#![feature(noop_waker)]
-
 use learn_wgpu::run;
 
 pub fn main() {

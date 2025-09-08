@@ -1,9 +1,8 @@
+use crate::VERTICES;
 use wgpu::{util::DeviceExt, CommandEncoderDescriptor, Label};
 use winit::{event::WindowEvent, window::Window};
 
-use crate::VERTICES;
-
-pub struct State<'a> {
+pub struct RendererState<'a> {
     surface: wgpu::Surface<'a>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -18,9 +17,9 @@ pub struct State<'a> {
     vertex_buffer: wgpu::Buffer,
 }
 
-impl<'a> State<'a> {
+impl<'a> RendererState<'a> {
     // Creating some of the wgpu types requires async code
-    pub async fn new(window: &'a Window) -> State<'a> {
+    pub async fn new(window: &'a Window) -> RendererState<'a> {
         let size = window.inner_size();
 
         // The instance is a handle to our GPU

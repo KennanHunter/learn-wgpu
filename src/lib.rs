@@ -1,6 +1,6 @@
 mod state;
 
-use state::State;
+use state::RendererState;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 use winit::{
@@ -41,7 +41,7 @@ pub async fn run() {
             .expect("Couldn't append canvas to document body.");
     }
 
-    let mut state = State::new(&window).await;
+    let mut state = RendererState::new(&window).await;
 
     event_loop
         .run(move |event, control_flow| match event {
@@ -59,7 +59,7 @@ pub async fn run() {
                         },
                     ..
                 } => control_flow.exit(),
-                WindowEvent::Resized(resized) => state.resize(*resized),
+                WindowEvent::Resized(new_window_size) => state.resize(*new_window_size),
 
                 WindowEvent::RedrawRequested => {
                     state.update();
