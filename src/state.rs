@@ -1,4 +1,4 @@
-use crate::VERTICES;
+use crate::{Vertex, INDICES, VERTICES};
 use wgpu::{util::DeviceExt, CommandEncoderDescriptor, Label};
 use winit::{event::WindowEvent, window::Window};
 
@@ -15,12 +15,19 @@ pub struct RendererState<'a> {
     render_pipeline: wgpu::RenderPipeline,
 
     vertex_buffer: wgpu::Buffer,
+    num_vertices: u32,
+
+    index_buffer: wgpu::Buffer,
+    num_indexes: u32,
 }
 
 impl<'a> RendererState<'a> {
     // Creating some of the wgpu types requires async code
     pub async fn new(window: &'a Window) -> RendererState<'a> {
         let size = window.inner_size();
+
+        let num_vertices = VERTICES.len() as u32;
+        let num_indexes = INDICES.len() as u32;
 
         // The instance is a handle to our GPU
         // Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
@@ -99,7 +106,7 @@ impl<'a> RendererState<'a> {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers: &[],
+                buffers: &[Vertex::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -137,6 +144,12 @@ impl<'a> RendererState<'a> {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(INDICES),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
         Self {
             surface,
             device,
@@ -146,6 +159,9 @@ impl<'a> RendererState<'a> {
             size,
             render_pipeline,
             vertex_buffer,
+            num_vertices,
+            index_buffer,
+            num_indexes,
         }
     }
 
@@ -162,7 +178,7 @@ impl<'a> RendererState<'a> {
         }
     }
 
-    pub fn input(&mut self, event: &WindowEvent) -> bool {
+    pub fn input(&mut self, _event: &WindowEvent) -> bool {
         false
     }
 
@@ -203,7 +219,12 @@ impl<'a> RendererState<'a> {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.draw(0..3, 0..1);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+
+            log::trace!("Drawing {} vertices", self.num_vertices);
+
+            render_pass.draw_indexed(0..self.num_indexes, 0, 0..1);
         }
 
         // submit will accept anything that implements IntoIter
