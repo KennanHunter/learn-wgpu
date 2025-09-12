@@ -1,3 +1,4 @@
+use crate::texture::CustomTexture;
 use crate::{Vertex, INDICES, VERTICES};
 use wgpu::{util::DeviceExt, CommandEncoderDescriptor, Label};
 use winit::{event::WindowEvent, window::Window};
@@ -19,6 +20,8 @@ pub struct RendererState<'a> {
 
     index_buffer: wgpu::Buffer,
     num_indexes: u32,
+
+    diffuse_bind_group: wgpu::BindGroup,
 }
 
 impl<'a> RendererState<'a> {
@@ -88,6 +91,51 @@ impl<'a> RendererState<'a> {
             view_formats: Vec::new(),
         };
 
+        let tree_texture = CustomTexture::from_bytes(
+            include_bytes!("happy-tree.png"),
+            &device,
+            &queue,
+            Some("Happy Tree!"),
+        );
+
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("texture_bind_group_layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+
+        let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("diffuse_bind_group"),
+            layout: &texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&tree_texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&tree_texture.sampler),
+                },
+            ],
+        });
+
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
@@ -96,7 +144,7 @@ impl<'a> RendererState<'a> {
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[],
+                bind_group_layouts: &[&texture_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -162,6 +210,7 @@ impl<'a> RendererState<'a> {
             num_vertices,
             index_buffer,
             num_indexes,
+            diffuse_bind_group,
         }
     }
 
@@ -219,6 +268,9 @@ impl<'a> RendererState<'a> {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
+
+            render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 

@@ -1,7 +1,6 @@
 {
-    "cSpell.words": [
-        "webgl",
-        "wgpu",
-        "winit"
-    ]
+  "cSpell.words": ["webgl", "wgpu", "winit"],
+  "github.copilot.enable": {
+    "*": false
+  }
 }
