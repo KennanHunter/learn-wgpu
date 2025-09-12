@@ -1,7 +1,12 @@
+use image::{GenericImageView, RgbaImage};
+use wgpu::Extent3d;
+
 pub struct CustomTexture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
+    pub data: RgbaImage,
+    pub size: wgpu::Extent3d,
 }
 
 impl CustomTexture {
@@ -24,8 +29,6 @@ impl CustomTexture {
     ) -> CustomTexture {
         let diffuse_rgba = image.to_rgba8();
 
-        use image::GenericImageView;
-
         let dimensions = image.dimensions();
 
         let texture_size = wgpu::Extent3d {
@@ -47,25 +50,6 @@ impl CustomTexture {
             view_formats: &[],
         });
 
-        queue.write_texture(
-            // Tells wgpu where to copy the pixel data
-            wgpu::ImageCopyTexture {
-                texture: &diffuse_texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            // The actual pixel data
-            &diffuse_rgba,
-            // The layout of the texture
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * dimensions.0),
-                rows_per_image: Some(dimensions.1),
-            },
-            texture_size,
-        );
-
         let diffuse_texture_view =
             diffuse_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -81,10 +65,41 @@ impl CustomTexture {
             ..Default::default()
         });
 
-        Self {
+        let texture = Self {
             texture: diffuse_texture,
             view: diffuse_texture_view,
             sampler: diffuse_sampler,
-        }
+            data: diffuse_rgba,
+            size: texture_size,
+        };
+
+        texture.write(&queue);
+
+        texture
+    }
+
+    pub fn write(&self, queue: &wgpu::Queue) {
+        queue.write_texture(
+            // Tells wgpu where to copy the pixel data
+            wgpu::ImageCopyTexture {
+                texture: &self.texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            // The actual pixel data
+            &self.data,
+            // The layout of the texture
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * self.size.width),
+                rows_per_image: Some(self.size.height),
+            },
+            Extent3d {
+                width: self.size.width,
+                height: self.size.height,
+                depth_or_array_layers: 1,
+            },
+        );
     }
 }
