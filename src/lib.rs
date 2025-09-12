@@ -3,6 +3,7 @@ mod state;
 use state::RendererState;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
+use wgpu::COPY_BUFFER_ALIGNMENT;
 use winit::{
     event::{ElementState, Event, KeyEvent, WindowEvent},
     event_loop::EventLoop,
@@ -104,7 +105,12 @@ impl Vertex {
     }
 }
 
-const VERTICES: &[Vertex] = &[
+enum VertexState {
+    First,
+    Second,
+}
+
+const FIRST_VERTEX_STATE: [Vertex; 5] = [
     Vertex {
         position: [-0.0868241, 0.49240386, 0.0],
         color: [0.5, 0.0, 0.5],
@@ -126,5 +132,64 @@ const VERTICES: &[Vertex] = &[
         color: [0.5, 0.0, 0.5],
     },
 ];
+const FIRST_INDEX_STATE: [u16; 9] = [0, 1, 4, 1, 2, 4, 2, 3, 4];
 
-const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
+const SECOND_VERTEX_STATE: [Vertex; 5] = [
+    Vertex {
+        position: [-0.0868241, 0.49240386, 0.0],
+        color: [0.2, 0.0, 0.5],
+    },
+    Vertex {
+        position: [-0.39513406, 0.06958647, 0.0],
+        color: [0.3, 0.2, 0.5],
+    },
+    Vertex {
+        position: [-0.41918549, -0.44939706, 0.0],
+        color: [0.1, 0.9, 0.7],
+    },
+    Vertex {
+        position: [0.0, -0.3473291, 0.0],
+        color: [0.3, 0.3, 0.2],
+    },
+    Vertex {
+        position: [0.84147372, 0.5347359, 0.0],
+        color: [0.4, 0.4, 0.4],
+    },
+];
+const SECOND_INDEX_STATE: [u16; 9] = [0, 1, 4, 1, 2, 4, 2, 3, 4];
+
+fn calculate_padded_size(unpadded_size: usize, alignment: usize) -> usize {
+    (unpadded_size + alignment - 1) / alignment * alignment
+}
+
+impl VertexState {
+    pub fn vertices(&self) -> &[Vertex] {
+        match self {
+            VertexState::First => &FIRST_VERTEX_STATE,
+            VertexState::Second => &SECOND_VERTEX_STATE,
+        }
+    }
+
+    pub fn indexes(&self) -> Vec<u16> {
+        let index = match self {
+            VertexState::First => &FIRST_INDEX_STATE,
+            VertexState::Second => &SECOND_INDEX_STATE,
+        };
+
+        let mut arr = Vec::from(index);
+
+        let new_len = calculate_padded_size(index.len(), COPY_BUFFER_ALIGNMENT as usize);
+
+        arr.resize(new_len, 0);
+
+        arr
+    }
+
+    /// Rotates through the available vertex states
+    pub fn next(&self) -> Self {
+        match self {
+            VertexState::First => VertexState::Second,
+            VertexState::Second => VertexState::First,
+        }
+    }
+}

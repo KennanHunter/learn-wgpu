@@ -1,6 +1,10 @@
-use crate::{Vertex, INDICES, VERTICES};
+use crate::{Vertex, VertexState};
 use wgpu::{util::DeviceExt, CommandEncoderDescriptor, Label};
-use winit::{event::WindowEvent, window::Window};
+use winit::{
+    event::WindowEvent,
+    keyboard::{Key, NamedKey},
+    window::Window,
+};
 
 pub struct RendererState<'a> {
     surface: wgpu::Surface<'a>,
@@ -15,19 +19,15 @@ pub struct RendererState<'a> {
     render_pipeline: wgpu::RenderPipeline,
 
     vertex_buffer: wgpu::Buffer,
-    num_vertices: u32,
-
     index_buffer: wgpu::Buffer,
-    num_indexes: u32,
+
+    vertex_state: VertexState,
 }
 
 impl<'a> RendererState<'a> {
     // Creating some of the wgpu types requires async code
     pub async fn new(window: &'a Window) -> RendererState<'a> {
         let size = window.inner_size();
-
-        let num_vertices = VERTICES.len() as u32;
-        let num_indexes = INDICES.len() as u32;
 
         // The instance is a handle to our GPU
         // Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
@@ -138,16 +138,18 @@ impl<'a> RendererState<'a> {
             cache: None,
         });
 
+        let default_vertex_state = VertexState::First;
+
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
+            contents: bytemuck::cast_slice(default_vertex_state.vertices()),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX,
+            contents: bytemuck::cast_slice(&default_vertex_state.indexes()),
+            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
         });
 
         Self {
@@ -159,9 +161,9 @@ impl<'a> RendererState<'a> {
             size,
             render_pipeline,
             vertex_buffer,
-            num_vertices,
             index_buffer,
-            num_indexes,
+
+            vertex_state: default_vertex_state,
         }
     }
 
@@ -178,8 +180,36 @@ impl<'a> RendererState<'a> {
         }
     }
 
-    pub fn input(&mut self, _event: &WindowEvent) -> bool {
-        false
+    pub fn input(&mut self, event: &WindowEvent) -> bool {
+        match event {
+            WindowEvent::KeyboardInput {
+                device_id: _,
+                event,
+                is_synthetic: _,
+            } if event.logical_key == Key::Named(NamedKey::Space) => {
+                if event.repeat {
+                    return false;
+                }
+
+                log::info!("Spaced pressed! switching state");
+
+                self.vertex_state = self.vertex_state.next();
+
+                self.queue.write_buffer(
+                    &self.vertex_buffer,
+                    0,
+                    bytemuck::cast_slice(self.vertex_state.vertices()),
+                );
+                self.queue.write_buffer(
+                    &self.index_buffer,
+                    0,
+                    bytemuck::cast_slice(&self.vertex_state.indexes()),
+                );
+
+                true
+            }
+            _ => false,
+        }
     }
 
     pub fn update(&mut self) {}
@@ -222,9 +252,13 @@ impl<'a> RendererState<'a> {
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
-            log::trace!("Drawing {} vertices", self.num_vertices);
+            log::trace!(
+                "Drawing {} vertices with {} indexes",
+                self.vertex_state.vertices().len(),
+                self.vertex_state.indexes().len()
+            );
 
-            render_pass.draw_indexed(0..self.num_indexes, 0, 0..1);
+            render_pass.draw_indexed(0..(self.vertex_state.indexes().len() as u32), 0, 0..1);
         }
 
         // submit will accept anything that implements IntoIter
