@@ -1,4 +1,5 @@
 pub mod camera;
+pub mod model_rotation;
 pub mod state;
 pub mod texture;
 

@@ -1,7 +1,12 @@
 use crate::camera::{Camera, CameraController, CameraUniform};
+use crate::model_rotation::{ModelRotationState, ModelRotationUniform};
 use crate::texture::CustomTexture;
 use crate::{Vertex, INDICES, VERTICES};
+use wgpu::util::BufferInitDescriptor;
 use wgpu::{util::DeviceExt, CommandEncoderDescriptor, Label};
+use wgpu::{
+    BindGroupDescriptor, BindGroupLayoutDescriptor, BindGroupLayoutEntry, PipelineLayoutDescriptor,
+};
 use winit::{event::WindowEvent, window::Window};
 
 #[allow(unused)]
@@ -30,6 +35,11 @@ pub struct RendererState<'a> {
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     camera_controller: CameraController,
+
+    model_rotation: ModelRotationState,
+    model_rotation_uniform: ModelRotationUniform,
+    model_rotation_buffer: wgpu::Buffer,
+    model_rotation_bind_group: wgpu::BindGroup,
 }
 
 impl<'a> RendererState<'a> {
@@ -197,12 +207,50 @@ impl<'a> RendererState<'a> {
 
         let camera_controller = CameraController::new(0.05);
 
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
-                push_constant_ranges: &[],
+        let model_rotation = ModelRotationState { rotation: 0.0 };
+
+        let mut model_rotation_uniform = ModelRotationUniform::new();
+        model_rotation_uniform.update_rotation_proj(&model_rotation);
+
+        let model_rotation_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("model_rotation_buffer"),
+            contents: bytemuck::cast_slice(&[model_rotation_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let model_rotation_bind_group_layout =
+            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("model_rotation_bind_group_layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
             });
+
+        let model_rotation_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("model_rotation_bind_group"),
+            layout: &model_rotation_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: model_rotation_buffer.as_entire_binding(),
+            }],
+        });
+
+        let render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("Render Pipeline Layout"),
+            bind_group_layouts: &[
+                &texture_bind_group_layout,
+                &camera_bind_group_layout,
+                &model_rotation_bind_group_layout,
+            ],
+            push_constant_ranges: &[],
+        });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
@@ -272,6 +320,11 @@ impl<'a> RendererState<'a> {
             camera_buffer,
             camera_uniform,
             camera_controller,
+
+            model_rotation_bind_group,
+            model_rotation,
+            model_rotation_uniform,
+            model_rotation_buffer,
         }
     }
 
@@ -340,6 +393,7 @@ impl<'a> RendererState<'a> {
 
             render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
+            render_pass.set_bind_group(2, &self.model_rotation_bind_group, &[]);
 
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
