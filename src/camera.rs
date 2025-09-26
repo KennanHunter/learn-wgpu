@@ -22,18 +22,18 @@ impl Camera {
 
         let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
 
-        // OPENGL_TO_WGPU_MATRIX *
-        return proj * view;
+        // 
+        return OPENGL_TO_WGPU_MATRIX * proj * view;
     }
 }
 
 // TODO: I want to better understand the impact of this mapping
-// pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_cols(
-//     cgmath::Vector4::new(1.0, 0.0, 0.0, 0.0),
-//     cgmath::Vector4::new(0.0, 1.0, 0.0, 0.0),
-//     cgmath::Vector4::new(0.0, 0.0, 0.5, 0.0),
-//     cgmath::Vector4::new(0.0, 0.0, 0.5, 1.0),
-// );
+pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_cols(
+    cgmath::Vector4::new(1.0, 0.0, 0.0, 0.0),
+    cgmath::Vector4::new(0.0, 1.0, 0.0, 0.0),
+    cgmath::Vector4::new(0.0, 0.0, 0.5, 0.0),
+    cgmath::Vector4::new(0.0, 0.0, 0.5, 1.0),
+);
 
 // We need this for Rust to store our data correctly for the shaders
 #[repr(C)]
