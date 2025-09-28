@@ -1,6 +1,7 @@
 use crate::camera::{Camera, CameraController, CameraUniform};
 use crate::texture::CustomTexture;
-use crate::{Vertex, INDICES, VERTICES};
+use crate::{Instance, InstanceRaw, Vertex, INDICES, VERTICES};
+use cgmath::prelude::*;
 use wgpu::{util::DeviceExt, CommandEncoderDescriptor, Label};
 use winit::{event::WindowEvent, window::Window};
 
@@ -23,6 +24,9 @@ pub struct RendererState<'a> {
     index_buffer: wgpu::Buffer,
     num_indexes: u32,
 
+    instances: Vec<Instance>,
+    instance_buffer: wgpu::Buffer,
+
     diffuse_bind_group: wgpu::BindGroup,
 
     camera: Camera,
@@ -32,6 +36,13 @@ pub struct RendererState<'a> {
     camera_controller: CameraController,
 }
 
+const NUM_INSTANCES_PER_ROW: u32 = 10;
+const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
+    NUM_INSTANCES_PER_ROW as f32 * 0.5,
+    0.0,
+    NUM_INSTANCES_PER_ROW as f32 * 0.5,
+);
+
 impl<'a> RendererState<'a> {
     // Creating some of the wgpu types requires async code
     pub async fn new(window: &'a Window) -> RendererState<'a> {
@@ -39,6 +50,32 @@ impl<'a> RendererState<'a> {
 
         let num_vertices = VERTICES.len() as u32;
         let num_indexes = INDICES.len() as u32;
+
+        let instances = (0..NUM_INSTANCES_PER_ROW)
+            .flat_map(|z| {
+                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                    let position = cgmath::Vector3 {
+                        x: x as f32,
+                        y: 0.0,
+                        z: z as f32,
+                    } - INSTANCE_DISPLACEMENT;
+
+                    let rotation = if position.is_zero() {
+                        // this is needed so an object at (0, 0, 0) won't get scaled to zero
+                        // as Quaternions can affect scale if they're not created correctly
+                        cgmath::Quaternion::from_axis_angle(
+                            cgmath::Vector3::unit_z(),
+                            cgmath::Deg(0.0),
+                        )
+                    } else {
+                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
+                    };
+
+                    Instance { position, rotation }
+                })
+            })
+            .collect::<Vec<_>>();
+        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
 
         // The instance is a handle to our GPU
         // Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
@@ -210,7 +247,7 @@ impl<'a> RendererState<'a> {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers: &[Vertex::desc()],
+                buffers: &[Vertex::desc(), InstanceRaw::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -254,6 +291,12 @@ impl<'a> RendererState<'a> {
             usage: wgpu::BufferUsages::INDEX,
         });
 
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance Buffer"),
+            contents: bytemuck::cast_slice(&instance_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
         Self {
             surface,
             device,
@@ -262,10 +305,16 @@ impl<'a> RendererState<'a> {
             window,
             size,
             render_pipeline,
+
             vertex_buffer,
             num_vertices,
+
             index_buffer,
             num_indexes,
+
+            instances,
+            instance_buffer,
+
             diffuse_bind_group,
             camera,
             camera_bind_group,
@@ -342,11 +391,13 @@ impl<'a> RendererState<'a> {
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
 
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
             log::trace!("Drawing {} vertices", self.num_vertices);
 
-            render_pass.draw_indexed(0..self.num_indexes, 0, 0..1);
+            render_pass.draw_indexed(0..self.num_indexes, 0, 0..self.instances.len() as u32);
         }
 
         // submit will accept anything that implements IntoIter
