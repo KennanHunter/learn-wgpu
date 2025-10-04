@@ -1,5 +1,5 @@
 use crate::camera::{Camera, CameraController, CameraUniform};
-use crate::texture::CustomTexture;
+use crate::texture::{self, CustomTexture, DepthTexture};
 use crate::{Instance, InstanceRaw, Vertex, INDICES, VERTICES};
 use cgmath::prelude::*;
 use wgpu::{util::DeviceExt, CommandEncoderDescriptor, Label};
@@ -34,6 +34,8 @@ pub struct RendererState<'a> {
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     camera_controller: CameraController,
+
+    depth_texture: DepthTexture,
 }
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
@@ -186,6 +188,8 @@ impl<'a> RendererState<'a> {
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
 
+        let depth_texture = DepthTexture::create_depth_texture(&device, &config, "Depth Buffer");
+
         let camera = Camera {
             // z is 2, means out of the screen pushes camera back by 2 units
             eye: (0.0, 1.0, 2.0).into(),
@@ -269,7 +273,13 @@ impl<'a> RendererState<'a> {
                 unclipped_depth: false,
                 conservative: false,
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: texture::DepthTexture::DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
@@ -315,6 +325,8 @@ impl<'a> RendererState<'a> {
             instances,
             instance_buffer,
 
+            depth_texture,
+
             diffuse_bind_group,
             camera,
             camera_bind_group,
@@ -333,7 +345,10 @@ impl<'a> RendererState<'a> {
             self.size = new_size;
             self.config.width = new_size.width;
             self.config.height = new_size.height;
-            self.surface.configure(&self.device, &self.config)
+            self.surface.configure(&self.device, &self.config);
+
+            self.depth_texture =
+                DepthTexture::create_depth_texture(&self.device, &self.config, "depth_texture")
         }
     }
 
@@ -380,7 +395,14 @@ impl<'a> RendererState<'a> {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
                 occlusion_query_set: None,
                 timestamp_writes: None,
             });
