@@ -86,6 +86,8 @@ pub async fn load_model(
 
     let mut obj_reader = BufReader::new(obj_cursor);
 
+    // TODO: switch to tobj::futures::load_obj_buf_async impl
+    #[allow(deprecated)]
     let (models, obj_materials) = tobj::load_obj_buf_async(
         &mut obj_reader,
         &tobj::LoadOptions {

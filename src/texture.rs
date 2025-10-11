@@ -73,7 +73,7 @@ impl CustomTexture {
             size: texture_size,
         };
 
-        texture.write(&queue);
+        texture.write(queue);
 
         texture
     }

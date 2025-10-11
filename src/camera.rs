@@ -22,7 +22,7 @@ impl Camera {
 
         let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
 
-        return OPENGL_TO_WGPU_MATRIX * proj * view;
+        OPENGL_TO_WGPU_MATRIX * proj * view
     }
 }
 
@@ -42,6 +42,12 @@ pub struct CameraUniform {
     // We can't use cgmath with bytemuck directly, so we'll have
     // to convert the Matrix4 into a 4x4 f32 array
     view_proj: [[f32; 4]; 4],
+}
+
+impl Default for CameraUniform {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CameraUniform {
