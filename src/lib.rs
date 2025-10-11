@@ -1,4 +1,5 @@
 pub mod camera;
+pub mod lighting;
 pub mod model;
 pub mod resources;
 pub mod state;
