@@ -1,6 +1,8 @@
 use crate::camera::{Camera, CameraController, CameraUniform};
-use crate::texture::{self, CustomTexture, DepthTexture};
-use crate::{Instance, InstanceRaw, Vertex, INDICES, VERTICES};
+use crate::model::{DrawModel, Model, ModelVertex, Vertex};
+use crate::resources::load_model;
+use crate::texture::{CustomTexture, DepthTexture};
+use crate::{Instance, InstanceRaw};
 use cgmath::prelude::*;
 use wgpu::{util::DeviceExt, CommandEncoderDescriptor, Label};
 use winit::{event::WindowEvent, window::Window};
@@ -18,12 +20,6 @@ pub struct RendererState<'a> {
 
     render_pipeline: wgpu::RenderPipeline,
 
-    vertex_buffer: wgpu::Buffer,
-    num_vertices: u32,
-
-    index_buffer: wgpu::Buffer,
-    num_indexes: u32,
-
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
 
@@ -36,6 +32,8 @@ pub struct RendererState<'a> {
     camera_controller: CameraController,
 
     depth_texture: DepthTexture,
+
+    obj_model: Model,
 }
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
@@ -44,23 +42,20 @@ const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
     0.0,
     NUM_INSTANCES_PER_ROW as f32 * 0.5,
 );
+const SPACE_BETWEEN: f32 = 3.0;
 
 impl<'a> RendererState<'a> {
     // Creating some of the wgpu types requires async code
     pub async fn new(window: &'a Window) -> RendererState<'a> {
         let size = window.inner_size();
 
-        let num_vertices = VERTICES.len() as u32;
-        let num_indexes = INDICES.len() as u32;
-
         let instances = (0..NUM_INSTANCES_PER_ROW)
             .flat_map(|z| {
                 (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                    let position = cgmath::Vector3 {
-                        x: x as f32,
-                        y: 0.0,
-                        z: z as f32,
-                    } - INSTANCE_DISPLACEMENT;
+                    let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                    let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+
+                    let position = cgmath::Vector3 { x, y: 0.0, z };
 
                     let rotation = if position.is_zero() {
                         // this is needed so an object at (0, 0, 0) won't get scaled to zero
@@ -251,7 +246,7 @@ impl<'a> RendererState<'a> {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers: &[Vertex::desc(), InstanceRaw::desc()],
+                buffers: &[ModelVertex::desc(), InstanceRaw::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -274,7 +269,7 @@ impl<'a> RendererState<'a> {
                 conservative: false,
             },
             depth_stencil: Some(wgpu::DepthStencilState {
-                format: texture::DepthTexture::DEPTH_FORMAT,
+                format: DepthTexture::DEPTH_FORMAT,
                 depth_write_enabled: true,
                 depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState::default(),
@@ -289,23 +284,15 @@ impl<'a> RendererState<'a> {
             cache: None,
         });
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Instance Buffer"),
             contents: bytemuck::cast_slice(&instance_data),
             usage: wgpu::BufferUsages::VERTEX,
         });
+
+        let obj_model = load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
+            .await
+            .unwrap();
 
         Self {
             surface,
@@ -316,14 +303,10 @@ impl<'a> RendererState<'a> {
             size,
             render_pipeline,
 
-            vertex_buffer,
-            num_vertices,
-
-            index_buffer,
-            num_indexes,
-
-            instances,
             instance_buffer,
+            instances,
+
+            obj_model,
 
             depth_texture,
 
@@ -412,14 +395,16 @@ impl<'a> RendererState<'a> {
             render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
 
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
 
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-
-            log::trace!("Drawing {} vertices", self.num_vertices);
-
-            render_pass.draw_indexed(0..self.num_indexes, 0, 0..self.instances.len() as u32);
+            render_pass.draw_model_instanced(
+                &self.obj_model,
+                0..self.instances.len() as u32,
+                &self.camera_bind_group,
+            );
         }
 
         // submit will accept anything that implements IntoIter

@@ -22,7 +22,6 @@ impl Camera {
 
         let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
 
-        // 
         return OPENGL_TO_WGPU_MATRIX * proj * view;
     }
 }
