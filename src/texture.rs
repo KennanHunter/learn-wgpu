@@ -1,5 +1,5 @@
 use image::{GenericImageView, RgbaImage};
-use wgpu::Extent3d;
+use wgpu::{Extent3d, TexelCopyTextureInfoBase};
 
 pub struct CustomTexture {
     pub texture: wgpu::Texture,
@@ -81,7 +81,7 @@ impl CustomTexture {
     pub fn write(&self, queue: &wgpu::Queue) {
         queue.write_texture(
             // Tells wgpu where to copy the pixel data
-            wgpu::ImageCopyTexture {
+            TexelCopyTextureInfoBase {
                 texture: &self.texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
@@ -90,7 +90,7 @@ impl CustomTexture {
             // The actual pixel data
             &self.data,
             // The layout of the texture
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * self.size.width),
                 rows_per_image: Some(self.size.height),

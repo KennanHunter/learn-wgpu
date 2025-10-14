@@ -5,7 +5,8 @@ use crate::resources::load_model;
 use crate::texture::{CustomTexture, DepthTexture};
 use crate::{Instance, InstanceRaw};
 use cgmath::prelude::*;
-use wgpu::util::RenderEncoder;
+use egui_wgpu::{RendererOptions, WgpuConfiguration};
+use wgpu::ExperimentalFeatures;
 use wgpu::{util::DeviceExt, CommandEncoderDescriptor, Label};
 use winit::{event::WindowEvent, window::Window};
 
@@ -21,6 +22,8 @@ pub struct RendererState<'a> {
     window: &'a Window,
 
     render_pipeline: wgpu::RenderPipeline,
+
+    egui_renderer: egui_wgpu::RenderState,
 
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
@@ -78,7 +81,7 @@ impl<'a> RendererState<'a> {
 
         // The instance is a handle to our GPU
         // Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             #[cfg(not(target_arch = "wasm32"))]
             backends: wgpu::Backends::PRIMARY,
             #[cfg(target_arch = "wasm32")]
@@ -98,19 +101,18 @@ impl<'a> RendererState<'a> {
             .unwrap();
 
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: None,
-                    required_features: wgpu::Features::empty(),
-                    required_limits: if cfg!(target_arch = "wasm32") {
-                        wgpu::Limits::downlevel_webgl2_defaults()
-                    } else {
-                        wgpu::Limits::default()
-                    },
-                    memory_hints: wgpu::MemoryHints::Performance,
+            .request_device(&wgpu::DeviceDescriptor {
+                label: None,
+                required_features: wgpu::Features::empty(),
+                required_limits: if cfg!(target_arch = "wasm32") {
+                    wgpu::Limits::downlevel_webgl2_defaults()
+                } else {
+                    wgpu::Limits::default()
                 },
-                None,
-            )
+                memory_hints: wgpu::MemoryHints::Performance,
+                experimental_features: ExperimentalFeatures::default(),
+                trace: wgpu::Trace::Off,
+            })
             .await
             .unwrap();
 
@@ -134,6 +136,15 @@ impl<'a> RendererState<'a> {
             alpha_mode: surface_capabilities.alpha_modes[0],
             view_formats: Vec::new(),
         };
+
+        let egui_renderer = egui_wgpu::RenderState::create(
+            &WgpuConfiguration::default(),
+            &instance,
+            None,
+            RendererOptions::default(),
+        )
+        .await
+        .expect("Should be able to create egui renderer");
 
         let tree_texture = CustomTexture::from_bytes(
             include_bytes!("happy-tree.png"),
@@ -331,6 +342,8 @@ impl<'a> RendererState<'a> {
             render_pipeline,
             light_render_pipeline,
 
+            egui_renderer,
+
             instance_buffer,
             instances,
 
@@ -417,6 +430,7 @@ impl<'a> RendererState<'a> {
                         }),
                         store: wgpu::StoreOp::Store,
                     },
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_texture.view,
@@ -471,13 +485,13 @@ fn create_render_pipeline(
         layout: Some(layout),
         vertex: wgpu::VertexState {
             module: &shader,
-            entry_point: ("vs_main"),
+            entry_point: Some("vs_main"),
             buffers: vertex_layouts,
             compilation_options: Default::default(),
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
-            entry_point: ("fs_main"),
+            entry_point: Some("fs_main"),
             targets: &[Some(wgpu::ColorTargetState {
                 format: color_format,
                 blend: Some(wgpu::BlendState {
