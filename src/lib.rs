@@ -1,3 +1,4 @@
+pub mod EguiRenderer;
 pub mod camera;
 pub mod lighting;
 pub mod model;

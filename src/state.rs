@@ -5,7 +5,7 @@ use crate::resources::load_model;
 use crate::texture::{CustomTexture, DepthTexture};
 use crate::{Instance, InstanceRaw};
 use cgmath::prelude::*;
-use egui_wgpu::{RendererOptions, WgpuConfiguration};
+use egui_wgpu::{RendererOptions, ScreenDescriptor, WgpuConfiguration};
 use wgpu::ExperimentalFeatures;
 use wgpu::{util::DeviceExt, CommandEncoderDescriptor, Label};
 use winit::{event::WindowEvent, window::Window};
@@ -23,6 +23,7 @@ pub struct RendererState<'a> {
 
     render_pipeline: wgpu::RenderPipeline,
 
+    egui_state: egui_winit::State,
     egui_renderer: egui_wgpu::RenderState,
 
     instances: Vec<Instance>,
@@ -458,6 +459,25 @@ impl<'a> RendererState<'a> {
                 0..self.instances.len() as u32,
                 &self.camera_bind_group,
                 &self.light_bind_group,
+            );
+
+
+            self.egui_renderer.
+
+
+
+            let mut static_render_pass = render_pass.forget_lifetime();
+
+
+
+            self.egui_renderer.renderer.read().render(
+                &mut static_render_pass,
+                &[],
+                // TODO: screen descriptor shit
+                &ScreenDescriptor {
+                    size_in_pixels: [100, 100],
+                    pixels_per_point: 1.0,
+                },
             );
         }
 
