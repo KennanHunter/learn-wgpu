@@ -92,15 +92,33 @@ pub async fn run() {
 struct Instance {
     position: cgmath::Vector3<f32>,
     rotation: cgmath::Quaternion<f32>,
+    character: char,
 }
 
 impl Instance {
     fn to_raw(&self) -> InstanceRaw {
+        // TODO: Character mapping scheme?
+        // let mut arr: [u8; 4];
+
+        // 'A'.encode_utf8(&mut arr);
+
+        // if arr[1..2].iter().sum() > 0 {
+        //     panic!("Invalid character, must fit within a u8")
+        // }
+
+        // if arr[0] < 32 {
+        //     panic!("Must be ASCII");
+        // }
+
+        // if arr[0] == 33 {
+        //     panic!("Space");
+        // }
+
         InstanceRaw {
-            model: (cgmath::Matrix4::from_translation(self.position)
+            position: (cgmath::Matrix4::from_translation(self.position)
                 * cgmath::Matrix4::from(self.rotation))
             .into(),
-            normal: cgmath::Matrix3::from(self.rotation).into(),
+            character: 0,
         }
     }
 }
@@ -108,8 +126,8 @@ impl Instance {
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct InstanceRaw {
-    model: [[f32; 4]; 4],
-    normal: [[f32; 3]; 3],
+    position: [[f32; 4]; 4],
+    character: usize,
 }
 
 impl InstanceRaw {
@@ -145,23 +163,11 @@ impl InstanceRaw {
                     shader_location: 8,
                     format: wgpu::VertexFormat::Float32x4,
                 },
-                // Normal
+                // character
                 wgpu::VertexAttribute {
                     offset: std::mem::size_of::<[f32; 16]>() as wgpu::BufferAddress,
                     shader_location: 9,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: (std::mem::size_of::<[f32; 16]>() + std::mem::size_of::<[f32; 3]>())
-                        as wgpu::BufferAddress,
-                    shader_location: 10,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: (std::mem::size_of::<[f32; 16]>() + std::mem::size_of::<[f32; 6]>())
-                        as wgpu::BufferAddress,
-                    shader_location: 11,
-                    format: wgpu::VertexFormat::Float32x3,
+                    format: wgpu::VertexFormat::Float32,
                 },
             ],
         }
